@@ -181,9 +181,9 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         contact_pair.collider2.index_u32(),
                     );
 
-                    if contact_pair.generates_constraints()
-                        && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
-                    {
+                    // Clean up by what exists, not `generates_constraints()`: that flag
+                    // can flip to false (disabled body/sensor) while handles still exist.
+                    if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
                         let has_island = contact_edge.island.is_some();
 
                         // Remove the contact pair from the constraint graph.
@@ -292,11 +292,12 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         .flags
                         .set(ContactPairFlags::STOPPED_TOUCHING, false);
 
-                    // Remove the contact pair from the constraint graph.
-                    if contact_pair.generates_constraints()
-                        && !contact_edge.constraint_handles.is_empty()
+                    // Same as the disjoint branch above: clean up by what exists.
+                    if !contact_edge.constraint_handles.is_empty()
                         && let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2)
                     {
+                        let has_island = contact_edge.island.is_some();
+
                         for _ in 0..contact_edge.constraint_handles.len() {
                             self.constraint_graph.pop_manifold(
                                 &mut self.contact_graph.edges,
@@ -307,7 +308,7 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         }
 
                         // Unlink the contact pair from its island.
-                        if let Some(islands) = &mut self.islands {
+                        if has_island && let Some(islands) = &mut self.islands {
                             let island = islands.remove_contact(
                                 contact_id,
                                 &mut self.body_islands,

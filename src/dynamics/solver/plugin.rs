@@ -395,11 +395,15 @@ fn prepare_contact_constraints(
                 })
                 .1;
             let manifold_index = handle.manifold_index;
-            let manifold = &contact_pair.manifolds[manifold_index];
 
+            // Check before indexing: stale handles can outlive a non-generating pair.
             if !contact_pair.generates_constraints() {
                 continue;
             }
+
+            let Some(manifold) = contact_pair.manifolds.get(manifold_index) else {
+                continue;
+            };
 
             let (Some(body1_entity), Some(body2_entity)) = (contact_pair.body1, contact_pair.body2)
             else {
