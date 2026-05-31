@@ -356,6 +356,33 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                         }
                     }
                 } else if contact_pair.is_touching()
+                    && !contact_pair.generates_constraints()
+                    && !contact_edge.constraint_handles.is_empty()
+                {
+                    // Stopped generating constraints but still touching: drop handles and
+                    // island link so it can be cleanly re-added if it generates again.
+                    if let (Some(body1), Some(body2)) = (contact_pair.body1, contact_pair.body2) {
+                        let has_island = contact_edge.island.is_some();
+
+                        for _ in 0..contact_edge.constraint_handles.len() {
+                            self.constraint_graph.pop_manifold(
+                                &mut self.contact_graph.edges,
+                                contact_id,
+                                body1,
+                                body2,
+                            );
+                        }
+
+                        if has_island && let Some(islands) = &mut self.islands {
+                            islands.remove_contact(
+                                contact_id,
+                                &mut self.body_islands,
+                                &mut self.contact_graph.edges,
+                                &self.joint_graph,
+                            );
+                        }
+                    }
+                } else if contact_pair.is_touching()
                     && contact_pair.generates_constraints()
                     && contact_pair.manifold_count_change > 0
                 {
@@ -595,6 +622,11 @@ impl<C: AnyCollider> NarrowPhase<'_, '_, C> {
                     contacts
                         .flags
                         .set(ContactPairFlags::STARTED_GENERATING_CONSTRAINTS, true);
+                    status_change_bits.set(contact_id);
+                } else if is_disabled && contacts.generates_constraints() {
+                    // Stopped generating while still touching (body disabled / became a
+                    // sensor). Flag it so its handles and island link are dropped, or a
+                    // later re-add would double-link the contact.
                     status_change_bits.set(contact_id);
                 }
 
